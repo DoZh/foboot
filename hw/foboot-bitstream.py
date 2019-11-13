@@ -38,6 +38,44 @@ from lxsocsupport import up5kspram, spi_flash
 import argparse
 import os
 
+_io_twinkle = [
+    ("serial", 0,
+        Subsignal("rx", Pins("12")),
+        Subsignal("tx", Pins("21"), Misc("PULLUP")),
+        IOStandard("LVCMOS33")
+    ),
+    ("usb", 0,
+        Subsignal("d_p", Pins("27")),
+        Subsignal("d_n", Pins("26")),
+        Subsignal("pullup", Pins("28")),
+        IOStandard("LVCMOS33")
+    ),
+    ("led", 0,
+        Subsignal("rgb0", Pins("39"), IOStandard("LVCMOS33")),
+        Subsignal("rgb1", Pins("40"), IOStandard("LVCMOS33")),
+        Subsignal("rgb2", Pins("41"), IOStandard("LVCMOS33")),
+    ),
+    ("touch", 0,
+        Subsignal("t1", Pins("48"), IOStandard("LVCMOS33")),
+        Subsignal("t2", Pins("47"), IOStandard("LVCMOS33")),
+        Subsignal("t3", Pins("46"), IOStandard("LVCMOS33")),
+        Subsignal("t4", Pins("45"), IOStandard("LVCMOS33")),
+    ),
+    ("spiflash", 0,
+        Subsignal("cs_n", Pins("16"), IOStandard("LVCMOS33")),
+        Subsignal("clk",  Pins("15"), IOStandard("LVCMOS33")),
+        Subsignal("miso", Pins("17"), IOStandard("LVCMOS33")),
+        Subsignal("mosi", Pins("14"), IOStandard("LVCMOS33")),
+        Subsignal("wp",   Pins("18"), IOStandard("LVCMOS33")),
+        Subsignal("hold", Pins("19"), IOStandard("LVCMOS33")),
+    ),
+    ("spiflash4x", 0,
+        Subsignal("cs_n", Pins("16"), IOStandard("LVCMOS33")),
+        Subsignal("clk",  Pins("15"), IOStandard("LVCMOS33")),
+        Subsignal("dq",   Pins("14 17 18 19"), IOStandard("LVCMOS33")),
+    ),
+    ("clk48", 0, Pins("20"), IOStandard("LVCMOS33"))
+]
 _io_evt = [
     ("serial", 0,
         Subsignal("rx", Pins("21")),
@@ -303,8 +341,10 @@ class Platform(LatticePlatform):
             LatticePlatform.__init__(self, "ice40-up5k-uwg30", _io_pvt, _connectors, toolchain="icestorm")
         elif revision == "hacker":
             LatticePlatform.__init__(self, "ice40-up5k-uwg30", _io_hacker, _connectors, toolchain="icestorm")
+        elif revision == "twinkle":
+            LatticePlatform.__init__(self, "ice40-up5k-sg48", _io_twinkle, _connectors, toolchain="icestorm")
         else:
-            raise ValueError("Unrecognized reivsion: {}.  Known values: evt, dvt, pvt, hacker".format(revision))
+            raise ValueError("Unrecognized reivsion: {}.  Known values: evt, dvt, pvt, hacker, twinkle".format(revision))
 
     def create_programmer(self):
         raise ValueError("programming is not supported")
@@ -319,7 +359,7 @@ class SBLED(Module, AutoCSR):
         self.raw = CSRStorage(3)
 
         ledd_value = Signal(3)
-        if revision == "pvt" or revision == "evt" or revision == "dvt":
+        if revision == "pvt" or revision == "evt" or revision == "dvt" or revision == "twinkle":
             self.comb += [
                 If(self.ctrl.storage[3], rgba_pwm[1].eq(self.raw.storage[0])).Else(rgba_pwm[1].eq(ledd_value[0])),
                 If(self.ctrl.storage[4], rgba_pwm[0].eq(self.raw.storage[1])).Else(rgba_pwm[0].eq(ledd_value[1])),
@@ -635,6 +675,10 @@ class Version(Module, AutoCSR):
             parent.config["FOMU_REV"] = "HACKER"
             parent.config["FOMU_REV_HACKER"] = 1
             self.comb += self.model.status.eq(0x48) # 'H'
+        elif model == "twinkle":
+            parent.config["FOMU_REV"] = "TWINKLE"
+            parent.config["FOMU_REV_TWINKLE"] = 1
+            self.comb += self.model.status.eq(0x54) # 'H'
         else:
             self.comb += self.model.status.eq(0x3f) # '?'
 
@@ -862,7 +906,7 @@ def main():
         help="where to have the CPU obtain its executable code from"
     )
     parser.add_argument(
-        "--revision", choices=["evt", "dvt", "pvt", "hacker"], required=True,
+        "--revision", choices=["evt", "dvt", "pvt", "hacker", "twinkle"], required=True,
         help="build foboot for a particular hardware revision"
     )
     parser.add_argument(
